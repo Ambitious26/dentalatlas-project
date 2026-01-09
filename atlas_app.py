@@ -231,7 +231,17 @@ if sheet and folder_id:
         # Section 1: General Information
         st.markdown("### 👤 Collection Details")
         c1, c2 = st.columns(2)
-        collector = c1.selectbox("Collector", ["TA 1", "TA 2", "TA 3", "TA 4", "TA 5"])
+        collector = c1.selectbox("Collector", [
+            "Dr. Doaa", 
+            "Dr. Fawzy", 
+            "Dr. Liala", 
+            "Dr. Mahmoud", 
+            "Dr. Aya", 
+            "Dr. Sohila", 
+            "Dr. Enas", 
+            "Dr. Sara", 
+            "Dr. Eman"
+        ])
         source = c2.selectbox("Source", ["University Hospital", "Private Clinic"])
         
         # Section 2: Tooth Identity
@@ -253,9 +263,19 @@ if sheet and folder_id:
         
         # Section 4: File Uploads
         st.markdown("### 📸 File Uploads")
-        c_img, c_dicom = st.columns(2)
-        uploaded_image = c_img.file_uploader("📷 Tooth Image", type=['jpg', 'png', 'jpeg'])
-        uploaded_dicom = c_dicom.file_uploader("📊 CBCT Data", type=['dcm', 'zip'])
+        st.info("Choose to upload files OR provide links (not both)")
+        
+        # Image Upload/Link
+        st.markdown("**Tooth Image:**")
+        img_col1, img_col2 = st.columns(2)
+        uploaded_image = img_col1.file_uploader("Upload Image", type=['jpg', 'png', 'jpeg'], key="img_upload")
+        image_link = img_col2.text_input("OR paste image link", placeholder="https://...", key="img_link")
+        
+        # DICOM/CBCT Upload/Link
+        st.markdown("**CBCT Data:**")
+        dicom_col1, dicom_col2 = st.columns(2)
+        uploaded_dicom = dicom_col1.file_uploader("Upload DICOM/Zip", type=['dcm', 'zip'], key="dicom_upload")
+        dicom_link_input = dicom_col2.text_input("OR paste CBCT link", placeholder="https://...", key="dicom_link")
         
         st.divider()
         
@@ -280,26 +300,32 @@ if sheet and folder_id:
             if not fdi_code or len(fdi_code) != 2:
                 st.error("❌ Please enter a valid 2-digit FDI Code")
             else:
-                with st.spinner("📤 Uploading to Google Drive..."):
+                with st.spinner("📤 Processing..."):
                     try:
                         # Generate final ID
                         final_usid = generate_usid(fdi_code, dentition, arch, side, count)
                         
-                        # 1. Upload Image
+                        # 1. Handle Image - Upload or Link
                         img_link = "No Image"
                         if uploaded_image:
                             file_ext = uploaded_image.name.split('.')[-1]
                             fname = f"{final_usid}.{file_ext}"
                             img_link = upload_to_drive(drive_service, uploaded_image, fname, folder_id)
                             st.success(f"✅ Image uploaded: {fname}")
+                        elif image_link.strip():
+                            img_link = image_link.strip()
+                            st.success(f"✅ Image link saved")
                         
-                        # 2. Upload DICOM
+                        # 2. Handle DICOM - Upload or Link
                         dicom_link = "No File"
                         if uploaded_dicom:
                             file_ext = uploaded_dicom.name.split('.')[-1]
                             fname = f"{final_usid}_CBCT.{file_ext}"
                             dicom_link = upload_to_drive(drive_service, uploaded_dicom, fname, folder_id)
                             st.success(f"✅ CBCT uploaded: {fname}")
+                        elif dicom_link_input.strip():
+                            dicom_link = dicom_link_input.strip()
+                            st.success(f"✅ CBCT link saved")
 
                         # 3. Save Data to Sheet
                         new_row = [
