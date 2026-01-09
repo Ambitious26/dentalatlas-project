@@ -33,28 +33,26 @@ def get_google_clients():
             
             # 🔴 FIX: Handle newline characters properly
             if "private_key" in creds_dict:
-                private_key = creds_dict["private_key"]
+                private_key = str(creds_dict["private_key"])
                 
-                # Debug: Show first 100 chars (safely)
-                st.write("Debug: Key starts with:", private_key[:50])
+                # Check if key has literal \n that need conversion
+                if "\\n" in repr(private_key):
+                    # This means we have string "\n" not actual newlines
+                    # Use encode/decode to properly convert escape sequences
+                    try:
+                        private_key = private_key.encode().decode('unicode_escape')
+                    except:
+                        # Fallback to simple replace
+                        private_key = private_key.replace("\\n", "\n")
                 
-                # Replace all variations of newline
-                private_key = private_key.replace("\\\\n", "\n")
-                private_key = private_key.replace("\\n", "\n")
-                
-                # Ensure it starts and ends correctly
-                if not private_key.strip().startswith("-----BEGIN"):
-                    st.error("❌ Private key doesn't start with -----BEGIN")
-                    st.stop()
-                
-                if not private_key.strip().endswith("-----"):
-                    st.error("❌ Private key doesn't end with -----")
+                # Ensure proper format
+                lines = private_key.strip().split('\n')
+                if len(lines) < 3:
+                    st.error("❌ Private key format is incorrect - not enough lines")
+                    st.info("Expected format with actual line breaks between key sections")
                     st.stop()
                     
                 creds_dict["private_key"] = private_key
-                
-                # Debug: Show what we're using
-                st.write("Debug: Key after processing starts with:", private_key[:50])
             
             # Use google.oauth2.service_account instead of oauth2client
             creds = service_account.Credentials.from_service_account_info(
