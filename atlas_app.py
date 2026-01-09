@@ -25,7 +25,14 @@ def get_google_clients():
     
     # 1. Try Streamlit Secrets (Cloud)
     if "gcp_service_account" in st.secrets:
-        creds_dict = st.secrets["gcp_service_account"]
+        # Create a mutable copy of the secrets dictionary
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        
+        # 🔴 FIX: Handle newline characters in private_key automatically
+        # This fixes the 'Invalid JWT Signature' error caused by copy-pasting
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
     
     # 2. Try Local File (Localhost)
@@ -82,7 +89,6 @@ try:
         st.stop()
         
     folder_id = find_drive_folder_id(drive_service, DRIVE_FOLDER_NAME)
-    # st.toast("✅ Connected to Google Services")
     
 except Exception as e:
     st.error(f"⚠️ Connection Failed: {e}")
@@ -121,7 +127,6 @@ with st.form("cloud_form", clear_on_submit=True):
     uploaded_dicom = c_dicom.file_uploader("DICOM/Zip", type=['dcm', 'zip'])
     
     # --- ID GENERATION LOGIC ---
-    # This is where the error likely happened before
     try:
         existing_data = sheet.get_all_values()
         count = len(existing_data) 
