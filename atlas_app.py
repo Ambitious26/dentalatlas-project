@@ -25,41 +25,41 @@ def get_google_clients():
     """Connect to Google Services using Streamlit Secrets or Local JSON"""
     creds = None
     
-    # 1. Try Streamlit Secrets (Cloud)
+    # 1. Try Streamlit Secrets (Cloud) - USING RAW JSON APPROACH
     if "gcp_service_account" in st.secrets:
         try:
-            # Create a mutable copy of the secrets dictionary
-            creds_dict = dict(st.secrets["gcp_service_account"])
+            # Build JSON string manually to avoid TOML parsing issues
+            json_str = f'''{{
+  "type": "{st.secrets["gcp_service_account"]["type"]}",
+  "project_id": "{st.secrets["gcp_service_account"]["project_id"]}",
+  "private_key_id": "{st.secrets["gcp_service_account"]["private_key_id"]}",
+  "private_key": "{st.secrets["gcp_service_account"]["private_key"]}",
+  "client_email": "{st.secrets["gcp_service_account"]["client_email"]}",
+  "client_id": "{st.secrets["gcp_service_account"]["client_id"]}",
+  "auth_uri": "{st.secrets["gcp_service_account"]["auth_uri"]}",
+  "token_uri": "{st.secrets["gcp_service_account"]["token_uri"]}",
+  "auth_provider_x509_cert_url": "{st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"]}",
+  "client_x509_cert_url": "{st.secrets["gcp_service_account"]["client_x509_cert_url"]}",
+  "universe_domain": "{st.secrets["gcp_service_account"].get("universe_domain", "googleapis.com")}"
+}}'''
             
-            # 🔴 FIX: Handle newline characters properly
-            if "private_key" in creds_dict:
-                private_key = str(creds_dict["private_key"])
-                
-                # Check if key has literal \n that need conversion
-                if "\\n" in repr(private_key):
-                    # This means we have string "\n" not actual newlines
-                    # Use encode/decode to properly convert escape sequences
-                    try:
-                        private_key = private_key.encode().decode('unicode_escape')
-                    except:
-                        # Fallback to simple replace
-                        private_key = private_key.replace("\\n", "\n")
-                
-                # Ensure proper format
-                lines = private_key.strip().split('\n')
-                if len(lines) < 3:
-                    st.error("❌ Private key format is incorrect - not enough lines")
-                    st.info("Expected format with actual line breaks between key sections")
-                    st.stop()
-                    
-                creds_dict["private_key"] = private_key
+            # Replace escaped newlines with actual newlines
+            json_str = json_str.replace('\\n', '\n')
             
-            # Use google.oauth2.service_account instead of oauth2client
+            # Parse the JSON
+            creds_dict = json.loads(json_str)
+            
+            # Create credentials
             creds = service_account.Credentials.from_service_account_info(
                 creds_dict,
                 scopes=SCOPE
             )
             
+        except json.JSONDecodeError as e:
+            st.error(f"❌ JSON Parse Error: {e}")
+            st.error("The private key format might be corrupted. Try the alternative method below.")
+            st.info("💡 Use the 'Upload JSON File' option in the sidebar instead")
+            st.stop()
         except Exception as e:
             st.error(f"❌ Authentication Error: {e}")
             st.exception(e)
@@ -89,6 +89,28 @@ def get_google_clients():
         st.error(f"❌ Failed to authorize Google services: {e}")
         st.exception(e)
         st.stop()
+
+def get_google_clients_from_uploaded_json(json_file):
+    """Create credentials from uploaded JSON file"""
+    try:
+        # Read the uploaded file
+        json_content = json.load(json_file)
+        
+        # Create credentials
+        creds = service_account.Credentials.from_service_account_info(
+            json_content,
+            scopes=SCOPE
+        )
+        
+        # Authorize clients
+        gc = gspread.authorize(creds)
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        return gc, drive_service
+    except Exception as e:
+        st.error(f"❌ Error loading JSON file: {e}")
+        st.exception(e)
+        return None, None
 
 def find_drive_folder_id(service, folder_name):
     """Find the Folder ID in Google Drive"""
@@ -141,13 +163,43 @@ def generate_usid(fdi_code, dentition, arch, side, count):
 # --- Frontend App ---
 
 st.set_page_config(page_title="Dental Atlas", page_icon="🦷", layout="wide")
+
+# Sidebar for alternative authentication
+with st.sidebar:
+    st.header("🔐 Authentication")
+    auth_method = st.radio(
+        "Choose Method:",
+        ["Use Streamlit Secrets", "Upload JSON File"]
+    )
+    
+    if auth_method == "Upload JSON File":
+        st.info("Upload your service account JSON file downloaded from Google Cloud Console")
+        uploaded_json = st.file_uploader("Service Account JSON", type=['json'])
+        use_uploaded = uploaded_json is not None
+    else:
+        use_uploaded = False
+        uploaded_json = None
+
 st.title("🦷 Dental Atlas - Cloud Data Collection System")
 st.caption("Connected to Google Drive & Sheets")
 
 # Initialize Connection
+gc = None
+drive_service = None
+sheet = None
+folder_id = None
+
 try:
     with st.spinner("Connecting to Google Services..."):
-        gc, drive_service = get_google_clients()
+        if use_uploaded and uploaded_json:
+            # Use uploaded JSON file
+            gc, drive_service = get_google_clients_from_uploaded_json(uploaded_json)
+        else:
+            # Use secrets
+            gc, drive_service = get_google_clients()
+        
+        if gc is None or drive_service is None:
+            st.stop()
         
     # Open or create spreadsheet
     try:
@@ -164,129 +216,133 @@ try:
     
 except Exception as e:
     st.error(f"⚠️ Connection Failed: {e}")
+    if not use_uploaded:
+        st.warning("💡 Try using 'Upload JSON File' method in the sidebar instead")
     st.stop()
 
 st.divider()
 
-# Data Entry Form
-with st.form("cloud_form", clear_on_submit=True):
-    st.subheader("📝 New Tooth Entry")
-    
-    # Section 1: General Information
-    st.markdown("### 👤 Collection Details")
-    c1, c2 = st.columns(2)
-    collector = c1.selectbox("Collector", ["TA 1", "TA 2", "TA 3", "TA 4", "TA 5"])
-    source = c2.selectbox("Source", ["University Hospital", "Private Clinic"])
-    
-    # Section 2: Tooth Identity
-    st.markdown("### 🦷 Tooth Identity")
-    c3, c4, c5 = st.columns(3)
-    dentition = c3.radio("Dentition", ["Permanent", "Deciduous"])
-    arch = c4.radio("Arch", ["Maxillary", "Mandibular"])
-    side = c5.radio("Side", ["Right", "Left"])
-    
-    c6, c7 = st.columns(2)
-    tooth_class = c6.selectbox("Tooth Class", ["Incisor", "Canine", "Premolar", "Molar"])
-    fdi_code = c7.text_input("FDI Code (2 digits)", max_chars=2, placeholder="e.g., 11, 36")
+# Only show form if connected
+if sheet and folder_id:
+    # Data Entry Form
+    with st.form("cloud_form", clear_on_submit=True):
+        st.subheader("📝 New Tooth Entry")
+        
+        # Section 1: General Information
+        st.markdown("### 👤 Collection Details")
+        c1, c2 = st.columns(2)
+        collector = c1.selectbox("Collector", ["TA 1", "TA 2", "TA 3", "TA 4", "TA 5"])
+        source = c2.selectbox("Source", ["University Hospital", "Private Clinic"])
+        
+        # Section 2: Tooth Identity
+        st.markdown("### 🦷 Tooth Identity")
+        c3, c4, c5 = st.columns(3)
+        dentition = c3.radio("Dentition", ["Permanent", "Deciduous"])
+        arch = c4.radio("Arch", ["Maxillary", "Mandibular"])
+        side = c5.radio("Side", ["Right", "Left"])
+        
+        c6, c7 = st.columns(2)
+        tooth_class = c6.selectbox("Tooth Class", ["Incisor", "Canine", "Premolar", "Molar"])
+        fdi_code = c7.text_input("FDI Code (2 digits)", max_chars=2, placeholder="e.g., 11, 36")
 
-    # Section 3: Measurements
-    st.markdown("### 📏 Measurements")
-    c8, c9 = st.columns(2)
-    crown_h = c8.number_input("Crown Height (mm)", min_value=0.0, step=0.1, format="%.1f")
-    root_l = c9.number_input("Root Length (mm)", min_value=0.0, step=0.1, format="%.1f")
-    
-    # Section 4: File Uploads
-    st.markdown("### 📸 File Uploads")
-    c_img, c_dicom = st.columns(2)
-    uploaded_image = c_img.file_uploader("📷 Tooth Image", type=['jpg', 'png', 'jpeg'])
-    uploaded_dicom = c_dicom.file_uploader("📊 CBCT Data", type=['dcm', 'zip'])
-    
-    st.divider()
-    
-    # --- ID GENERATION PREVIEW ---
-    try:
-        existing_data = sheet.get_all_values()
-        count = len(existing_data) 
-    except:
-        count = 1 
-    
-    if fdi_code:
-        generated_usid = generate_usid(fdi_code, dentition, arch, side, count)
-        st.info(f"🔹 **Generated ID:** `{generated_usid}`")
-    else:
-        st.warning("⚠️ Enter FDI Code to preview ID")
-    
-    # Submit Button
-    submitted = st.form_submit_button("🚀 SAVE TO CLOUD", type="primary", use_container_width=True)
-
-    if submitted:
-        # Validation
-        if not fdi_code or len(fdi_code) != 2:
-            st.error("❌ Please enter a valid 2-digit FDI Code")
+        # Section 3: Measurements
+        st.markdown("### 📏 Measurements")
+        c8, c9 = st.columns(2)
+        crown_h = c8.number_input("Crown Height (mm)", min_value=0.0, step=0.1, format="%.1f")
+        root_l = c9.number_input("Root Length (mm)", min_value=0.0, step=0.1, format="%.1f")
+        
+        # Section 4: File Uploads
+        st.markdown("### 📸 File Uploads")
+        c_img, c_dicom = st.columns(2)
+        uploaded_image = c_img.file_uploader("📷 Tooth Image", type=['jpg', 'png', 'jpeg'])
+        uploaded_dicom = c_dicom.file_uploader("📊 CBCT Data", type=['dcm', 'zip'])
+        
+        st.divider()
+        
+        # --- ID GENERATION PREVIEW ---
+        try:
+            existing_data = sheet.get_all_values()
+            count = len(existing_data) 
+        except:
+            count = 1 
+        
+        if fdi_code:
+            generated_usid = generate_usid(fdi_code, dentition, arch, side, count)
+            st.info(f"🔹 **Generated ID:** `{generated_usid}`")
         else:
-            with st.spinner("📤 Uploading to Google Drive..."):
-                try:
-                    # Generate final ID
-                    final_usid = generate_usid(fdi_code, dentition, arch, side, count)
-                    
-                    # 1. Upload Image
-                    img_link = "No Image"
-                    if uploaded_image:
-                        file_ext = uploaded_image.name.split('.')[-1]
-                        fname = f"{final_usid}.{file_ext}"
-                        img_link = upload_to_drive(drive_service, uploaded_image, fname, folder_id)
-                        st.success(f"✅ Image uploaded: {fname}")
-                    
-                    # 2. Upload DICOM
-                    dicom_link = "No File"
-                    if uploaded_dicom:
-                        file_ext = uploaded_dicom.name.split('.')[-1]
-                        fname = f"{final_usid}_CBCT.{file_ext}"
-                        dicom_link = upload_to_drive(drive_service, uploaded_dicom, fname, folder_id)
-                        st.success(f"✅ CBCT uploaded: {fname}")
+            st.warning("⚠️ Enter FDI Code to preview ID")
+        
+        # Submit Button
+        submitted = st.form_submit_button("🚀 SAVE TO CLOUD", type="primary", use_container_width=True)
 
-                    # 3. Save Data to Sheet
-                    new_row = [
-                        final_usid, 
-                        collector, 
-                        str(datetime.now().date()), 
-                        source,
-                        dentition, 
-                        arch, 
-                        side, 
-                        tooth_class, 
-                        fdi_code,
-                        crown_h, 
-                        root_l, 
-                        img_link, 
-                        dicom_link
-                    ]
-                    
-                    sheet.append_row(new_row)
-                    
-                    st.success(f"🎉 **Successfully saved!** Data ID: `{final_usid}`")
-                    
-                    # Display links
-                    col1, col2 = st.columns(2)
-                    if img_link != "No Image":
-                        col1.markdown(f"[🔗 View Image]({img_link})")
-                    if dicom_link != "No File":
-                        col2.markdown(f"[🔗 View CBCT]({dicom_link})")
+        if submitted:
+            # Validation
+            if not fdi_code or len(fdi_code) != 2:
+                st.error("❌ Please enter a valid 2-digit FDI Code")
+            else:
+                with st.spinner("📤 Uploading to Google Drive..."):
+                    try:
+                        # Generate final ID
+                        final_usid = generate_usid(fdi_code, dentition, arch, side, count)
                         
-                except Exception as e:
-                    st.error(f"❌ Error saving data: {e}")
-                    st.exception(e)
+                        # 1. Upload Image
+                        img_link = "No Image"
+                        if uploaded_image:
+                            file_ext = uploaded_image.name.split('.')[-1]
+                            fname = f"{final_usid}.{file_ext}"
+                            img_link = upload_to_drive(drive_service, uploaded_image, fname, folder_id)
+                            st.success(f"✅ Image uploaded: {fname}")
+                        
+                        # 2. Upload DICOM
+                        dicom_link = "No File"
+                        if uploaded_dicom:
+                            file_ext = uploaded_dicom.name.split('.')[-1]
+                            fname = f"{final_usid}_CBCT.{file_ext}"
+                            dicom_link = upload_to_drive(drive_service, uploaded_dicom, fname, folder_id)
+                            st.success(f"✅ CBCT uploaded: {fname}")
 
-# Display recent entries
-st.divider()
-st.subheader("📊 Recent Entries")
+                        # 3. Save Data to Sheet
+                        new_row = [
+                            final_usid, 
+                            collector, 
+                            str(datetime.now().date()), 
+                            source,
+                            dentition, 
+                            arch, 
+                            side, 
+                            tooth_class, 
+                            fdi_code,
+                            crown_h, 
+                            root_l, 
+                            img_link, 
+                            dicom_link
+                        ]
+                        
+                        sheet.append_row(new_row)
+                        
+                        st.success(f"🎉 **Successfully saved!** Data ID: `{final_usid}`")
+                        
+                        # Display links
+                        col1, col2 = st.columns(2)
+                        if img_link != "No Image":
+                            col1.markdown(f"[🔗 View Image]({img_link})")
+                        if dicom_link != "No File":
+                            col2.markdown(f"[🔗 View CBCT]({dicom_link})")
+                            
+                    except Exception as e:
+                        st.error(f"❌ Error saving data: {e}")
+                        st.exception(e)
 
-try:
-    data = sheet.get_all_records()
-    if data:
-        df = pd.DataFrame(data)
-        st.dataframe(df.tail(10), use_container_width=True)
-    else:
-        st.info("No data yet. Submit the first entry!")
-except Exception as e:
-    st.warning(f"Could not load recent data: {e}")
+    # Display recent entries
+    st.divider()
+    st.subheader("📊 Recent Entries")
+
+    try:
+        data = sheet.get_all_records()
+        if data:
+            df = pd.DataFrame(data)
+            st.dataframe(df.tail(10), use_container_width=True)
+        else:
+            st.info("No data yet. Submit the first entry!")
+    except Exception as e:
+        st.warning(f"Could not load recent data: {e}")
