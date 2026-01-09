@@ -248,6 +248,41 @@ if sheet and folder_id:
         c6, c7 = st.columns(2)
         tooth_class = c6.selectbox("Tooth Class", ["Incisor", "Canine", "Premolar", "Molar"])
         fdi_code = c7.text_input("FDI Code (2 digits)", max_chars=2, placeholder="e.g., 11, 36")
+        
+        # FDI Notation Guide
+        with st.expander("📖 FDI Notation Guide", expanded=False):
+            st.markdown("""
+            ### FDI World Dental Federation Two-Digit Notation
+            
+            **Permanent Teeth (Adult):**
+            - **Quadrant 1** (Upper Right): 11-18
+            - **Quadrant 2** (Upper Left): 21-28
+            - **Quadrant 3** (Lower Left): 31-38
+            - **Quadrant 4** (Lower Right): 41-48
+            
+            **Deciduous Teeth (Primary/Baby):**
+            - **Quadrant 5** (Upper Right): 51-55
+            - **Quadrant 6** (Upper Left): 61-65
+            - **Quadrant 7** (Lower Left): 71-75
+            - **Quadrant 8** (Lower Right): 81-85
+            
+            **Tooth Positions:**
+            - **1** = Central Incisor
+            - **2** = Lateral Incisor
+            - **3** = Canine
+            - **4** = First Premolar
+            - **5** = Second Premolar
+            - **6** = First Molar
+            - **7** = Second Molar
+            - **8** = Third Molar (Wisdom Tooth)
+            
+            **Examples:**
+            - `11` = Upper right central incisor
+            - `36` = Lower left first molar
+            - `48` = Lower right wisdom tooth
+            - `51` = Upper right primary central incisor
+            """)
+
 
         # Section 3: Measurements
         st.markdown("### 📏 Measurements")
