@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import io
 import os
+import json
 
 # --- Google Connection Settings ---
 SCOPE = [
@@ -30,65 +31,55 @@ def get_google_clients():
             # Create a mutable copy of the secrets dictionary
             creds_dict = dict(st.secrets["gcp_service_account"])
             
-            # 🔴 FIX: Handle multiple newline formats in private_key
+            # 🔴 FIX: Handle newline characters properly
             if "private_key" in creds_dict:
                 private_key = creds_dict["private_key"]
                 
-                # Handle all possible newline encodings
-                # 1. Replace \\n (double backslash) with actual newline
-                if "\\\\n" in private_key:
-                    private_key = private_key.replace("\\\\n", "\n")
-                # 2. Replace \n (single backslash) with actual newline
-                elif "\\n" in private_key:
-                    private_key = private_key.replace("\\n", "\n")
+                # Debug: Show first 100 chars (safely)
+                st.write("Debug: Key starts with:", private_key[:50])
                 
-                # Remove any extra whitespace but preserve newlines
-                private_key = private_key.strip()
+                # Replace all variations of newline
+                private_key = private_key.replace("\\\\n", "\n")
+                private_key = private_key.replace("\\n", "\n")
                 
-                # Ensure proper formatting
-                if not private_key.startswith("-----BEGIN"):
-                    st.error("❌ Private key format appears incorrect. Check secrets.toml")
-                    st.info("💡 Make sure your private_key in secrets.toml uses the format with \\n characters")
-                    st.code('''private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_KEY_HERE\\n-----END PRIVATE KEY-----\\n"''')
+                # Ensure it starts and ends correctly
+                if not private_key.strip().startswith("-----BEGIN"):
+                    st.error("❌ Private key doesn't start with -----BEGIN")
+                    st.stop()
+                
+                if not private_key.strip().endswith("-----"):
+                    st.error("❌ Private key doesn't end with -----")
                     st.stop()
                     
                 creds_dict["private_key"] = private_key
+                
+                # Debug: Show what we're using
+                st.write("Debug: Key after processing starts with:", private_key[:50])
             
-            # Create credentials
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
+            # Use google.oauth2.service_account instead of oauth2client
+            creds = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=SCOPE
+            )
             
         except Exception as e:
             st.error(f"❌ Authentication Error: {e}")
-            st.error("💡 **Common fixes:**")
-            st.markdown("""
-            1. Check your `secrets.toml` file format
-            2. Make sure private_key uses triple quotes: `private_key = \"\"\"-----BEGIN...`
-            3. Ensure the service account email is correct
-            4. Verify all required fields are present in secrets
-            """)
+            st.exception(e)
             st.stop()
     
     # 2. Try Local File (Localhost)
     elif os.path.exists("secrets.json"):
         try:
-            creds = ServiceAccountCredentials.from_json_keyfile_name("secrets.json", SCOPE)
+            creds = service_account.Credentials.from_service_account_file(
+                "secrets.json",
+                scopes=SCOPE
+            )
         except Exception as e:
             st.error(f"❌ Error loading secrets.json: {e}")
             st.stop()
     
     else:
         st.error("❌ Error: Secrets not found.")
-        st.info("""
-        **Setup Instructions:**
-        
-        **For Streamlit Cloud:**
-        1. Go to your app settings → Secrets
-        2. Add your service account credentials in TOML format
-        
-        **For Local Development:**
-        1. Download service account JSON from Google Cloud Console
-        2. Save it as `secrets.json` in your project folder
-        """)
         st.stop()
     
     try:
@@ -98,6 +89,7 @@ def get_google_clients():
         return gc, drive_service
     except Exception as e:
         st.error(f"❌ Failed to authorize Google services: {e}")
+        st.exception(e)
         st.stop()
 
 def find_drive_folder_id(service, folder_name):
@@ -120,7 +112,6 @@ def find_drive_folder_id(service, folder_name):
 def upload_to_drive(service, file_obj, filename, folder_id):
     """Upload a file to Google Drive and return link"""
     try:
-        # Reset file pointer to beginning
         file_obj.seek(0)
         
         file_metadata = {
@@ -128,7 +119,6 @@ def upload_to_drive(service, file_obj, filename, folder_id):
             'parents': [folder_id]
         }
         
-        # Create BytesIO object for upload
         file_bytes = io.BytesIO(file_obj.read())
         media = MediaIoBaseUpload(file_bytes, mimetype=file_obj.type, resumable=True)
         
