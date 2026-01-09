@@ -257,18 +257,58 @@ if sheet and folder_id:
         
         # FDI Notation Guide with Image
         with st.expander("📖 FDI Notation Guide (Click to view chart)", expanded=False):
-            st.image("https://i.imgur.com/8KX5YJZ.png", 
-                    caption="FDI Two-Digit Tooth Numbering System",
-                    use_container_width=True)
+            # You can replace this URL with your own image hosted on Google Drive, Imgur, or any image hosting service
+            # Option 1: Upload the FDI chart image to your Google Drive, make it public, and paste the direct link here
+            # Option 2: Use a free image hosting service like Imgur
+            # For now, showing a text-based guide
+            
             st.markdown("""
-            **How to read the FDI notation:**
-            - **First digit** = Quadrant (1-4 for permanent, 5-8 for deciduous)
-            - **Second digit** = Tooth position (1-8 for permanent, 1-5 for deciduous)
+            ### FDI Two-Digit Tooth Numbering System
+            
+            ```
+            PERMANENT TEETH (Adult):
+            
+            Upper Right (Q1)    Upper Left (Q2)
+            18 17 16 15 14 13 12 11 | 21 22 23 24 25 26 27 28
+            ------------------------------------------------
+            48 47 46 45 44 43 42 41 | 31 32 33 34 35 36 37 38
+            Lower Right (Q4)    Lower Left (Q3)
+            
+            
+            DECIDUOUS TEETH (Baby/Primary):
+            
+            Upper Right (Q5)    Upper Left (Q6)
+                55 54 53 52 51 | 61 62 63 64 65
+            ------------------------------------------------
+                85 84 83 82 81 | 71 72 73 74 75
+            Lower Right (Q8)    Lower Left (Q7)
+            ```
+            
+            **Tooth Position Key:**
+            - **1** = Central Incisor
+            - **2** = Lateral Incisor  
+            - **3** = Canine
+            - **4** = First Premolar (permanent only)
+            - **5** = Second Premolar (permanent) / Second Molar (deciduous)
+            - **6** = First Molar (permanent only)
+            - **7** = Second Molar (permanent only)
+            - **8** = Third Molar/Wisdom Tooth (permanent only)
             
             **Examples:**
             - `11` = Upper right central incisor (permanent)
             - `36` = Lower left first molar (permanent)
+            - `48` = Lower right wisdom tooth (permanent)
             - `51` = Upper right central incisor (deciduous)
+            - `75` = Lower left second molar (deciduous)
+            
+            ---
+            
+            **To add your FDI chart image:**
+            1. Upload the image to Google Drive
+            2. Right-click → Share → Anyone with link can view
+            3. Copy the file ID from the link
+            4. Use format: `https://drive.google.com/uc?export=view&id=YOUR_FILE_ID`
+            5. Replace the image URL in the code
             """)
 
 
