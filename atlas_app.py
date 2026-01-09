@@ -25,29 +25,23 @@ def get_google_clients():
     """Connect to Google Services using Streamlit Secrets or Local JSON"""
     creds = None
     
-    # 1. Try Streamlit Secrets (Cloud) - USING RAW JSON APPROACH
+    # 1. Try Streamlit Secrets (Cloud)
     if "gcp_service_account" in st.secrets:
         try:
-            # Build JSON string manually to avoid TOML parsing issues
-            json_str = f'''{{
-  "type": "{st.secrets["gcp_service_account"]["type"]}",
-  "project_id": "{st.secrets["gcp_service_account"]["project_id"]}",
-  "private_key_id": "{st.secrets["gcp_service_account"]["private_key_id"]}",
-  "private_key": "{st.secrets["gcp_service_account"]["private_key"]}",
-  "client_email": "{st.secrets["gcp_service_account"]["client_email"]}",
-  "client_id": "{st.secrets["gcp_service_account"]["client_id"]}",
-  "auth_uri": "{st.secrets["gcp_service_account"]["auth_uri"]}",
-  "token_uri": "{st.secrets["gcp_service_account"]["token_uri"]}",
-  "auth_provider_x509_cert_url": "{st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"]}",
-  "client_x509_cert_url": "{st.secrets["gcp_service_account"]["client_x509_cert_url"]}",
-  "universe_domain": "{st.secrets["gcp_service_account"].get("universe_domain", "googleapis.com")}"
-}}'''
-            
-            # Replace escaped newlines with actual newlines
-            json_str = json_str.replace('\\n', '\n')
-            
-            # Parse the JSON
-            creds_dict = json.loads(json_str)
+            # Convert secrets to dict directly (no JSON string building)
+            creds_dict = {
+                "type": st.secrets["gcp_service_account"]["type"],
+                "project_id": st.secrets["gcp_service_account"]["project_id"],
+                "private_key_id": st.secrets["gcp_service_account"]["private_key_id"],
+                "private_key": st.secrets["gcp_service_account"]["private_key"],
+                "client_email": st.secrets["gcp_service_account"]["client_email"],
+                "client_id": st.secrets["gcp_service_account"]["client_id"],
+                "auth_uri": st.secrets["gcp_service_account"]["auth_uri"],
+                "token_uri": st.secrets["gcp_service_account"]["token_uri"],
+                "auth_provider_x509_cert_url": st.secrets["gcp_service_account"]["auth_provider_x509_cert_url"],
+                "client_x509_cert_url": st.secrets["gcp_service_account"]["client_x509_cert_url"],
+                "universe_domain": st.secrets["gcp_service_account"].get("universe_domain", "googleapis.com")
+            }
             
             # Create credentials
             creds = service_account.Credentials.from_service_account_info(
@@ -62,7 +56,7 @@ def get_google_clients():
             st.stop()
         except Exception as e:
             st.error(f"❌ Authentication Error: {e}")
-            st.exception(e)
+            st.info("💡 Try using the 'Upload JSON File' option in the sidebar instead")
             st.stop()
     
     # 2. Try Local File (Localhost)
