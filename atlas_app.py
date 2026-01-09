@@ -224,7 +224,7 @@ if sheet and folder_id:
         
         # Section 1: General Information
         st.markdown("### 👤 Collection Details")
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         collector = c1.selectbox("Collector", [
             "Dr. Doaa", 
             "Dr. Fawzy", 
@@ -237,6 +237,12 @@ if sheet and folder_id:
             "Dr. Eman"
         ])
         source = c2.selectbox("Source", ["University Hospital", "Private Clinic"])
+        patient_gender = c3.selectbox("Patient Gender", ["Male", "Female", "Unknown"])
+        
+        # Medical History
+        medical_history = st.text_area("Medical History (Optional)", 
+                                       placeholder="Enter any relevant medical history, conditions, or notes...",
+                                       height=100)
         
         # Section 2: Tooth Identity
         st.markdown("### 🦷 Tooth Identity")
@@ -249,38 +255,20 @@ if sheet and folder_id:
         tooth_class = c6.selectbox("Tooth Class", ["Incisor", "Canine", "Premolar", "Molar"])
         fdi_code = c7.text_input("FDI Code (2 digits)", max_chars=2, placeholder="e.g., 11, 36")
         
-        # FDI Notation Guide
-        with st.expander("📖 FDI Notation Guide", expanded=False):
+        # FDI Notation Guide with Image
+        with st.expander("📖 FDI Notation Guide (Click to view chart)", expanded=False):
+            st.image("https://i.imgur.com/8KX5YJZ.png", 
+                    caption="FDI Two-Digit Tooth Numbering System",
+                    use_container_width=True)
             st.markdown("""
-            ### FDI World Dental Federation Two-Digit Notation
-            
-            **Permanent Teeth (Adult):**
-            - **Quadrant 1** (Upper Right): 11-18
-            - **Quadrant 2** (Upper Left): 21-28
-            - **Quadrant 3** (Lower Left): 31-38
-            - **Quadrant 4** (Lower Right): 41-48
-            
-            **Deciduous Teeth (Primary/Baby):**
-            - **Quadrant 5** (Upper Right): 51-55
-            - **Quadrant 6** (Upper Left): 61-65
-            - **Quadrant 7** (Lower Left): 71-75
-            - **Quadrant 8** (Lower Right): 81-85
-            
-            **Tooth Positions:**
-            - **1** = Central Incisor
-            - **2** = Lateral Incisor
-            - **3** = Canine
-            - **4** = First Premolar
-            - **5** = Second Premolar
-            - **6** = First Molar
-            - **7** = Second Molar
-            - **8** = Third Molar (Wisdom Tooth)
+            **How to read the FDI notation:**
+            - **First digit** = Quadrant (1-4 for permanent, 5-8 for deciduous)
+            - **Second digit** = Tooth position (1-8 for permanent, 1-5 for deciduous)
             
             **Examples:**
-            - `11` = Upper right central incisor
-            - `36` = Lower left first molar
-            - `48` = Lower right wisdom tooth
-            - `51` = Upper right primary central incisor
+            - `11` = Upper right central incisor (permanent)
+            - `36` = Lower left first molar (permanent)
+            - `51` = Upper right central incisor (deciduous)
             """)
 
 
@@ -362,6 +350,8 @@ if sheet and folder_id:
                             collector, 
                             str(datetime.now().date()), 
                             source,
+                            patient_gender,
+                            medical_history if medical_history.strip() else "None",
                             dentition, 
                             arch, 
                             side, 
