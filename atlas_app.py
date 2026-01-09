@@ -34,14 +34,22 @@ def get_google_clients():
             if "private_key" in creds_dict:
                 private_key = creds_dict["private_key"]
                 
-                # Replace literal \n strings with actual newlines
-                if "\\n" in private_key:
+                # Handle all possible newline encodings
+                # 1. Replace \\n (double backslash) with actual newline
+                if "\\\\n" in private_key:
+                    private_key = private_key.replace("\\\\n", "\n")
+                # 2. Replace \n (single backslash) with actual newline
+                elif "\\n" in private_key:
                     private_key = private_key.replace("\\n", "\n")
                 
+                # Remove any extra whitespace but preserve newlines
+                private_key = private_key.strip()
+                
                 # Ensure proper formatting
-                if not private_key.strip().startswith("-----BEGIN"):
+                if not private_key.startswith("-----BEGIN"):
                     st.error("❌ Private key format appears incorrect. Check secrets.toml")
-                    st.info("💡 Make sure your private_key in secrets.toml uses triple quotes and real line breaks")
+                    st.info("💡 Make sure your private_key in secrets.toml uses the format with \\n characters")
+                    st.code('''private_key = "-----BEGIN PRIVATE KEY-----\\nYOUR_KEY_HERE\\n-----END PRIVATE KEY-----\\n"''')
                     st.stop()
                     
                 creds_dict["private_key"] = private_key
